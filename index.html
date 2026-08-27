@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#2f6f4f" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<title>Bubble Grader</title>
+<style>
+  :root{
+    --bg:#f5f7f8; --surface:#ffffff; --ink:#16232e; --muted:#5c6b78;
+    --line:#dde3e8; --accent:#2f6f4f; --accent-ink:#ffffff;
+    --good:#2f6f4f; --bad:#b4462f; --warn:#b07d18; --chip:#eef2f4;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;}
+  header{position:sticky;top:0;z-index:5;background:var(--surface);
+    border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 14px 0;}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;}
+  .brand .dot{width:16px;height:16px;border-radius:50%;border:3px solid var(--accent);}
+  nav{display:flex;gap:4px;margin-top:10px;}
+  nav button{flex:1;font:inherit;font-weight:600;font-size:13.5px;padding:10px 4px;
+    border:none;background:none;color:var(--muted);border-bottom:2.5px solid transparent;cursor:pointer;}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent);}
+  main{max-width:640px;margin:0 auto;padding:14px 14px calc(28px + env(safe-area-inset-bottom));}
+  .view{display:none;} .view.on{display:block;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:14px;margin-bottom:14px;}
+  h2{font-size:15px;margin:0 0 8px;}
+  p.note{font-size:12.5px;color:var(--muted);line-height:1.45;margin:6px 0 0;}
+  label.blk{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;}
+
+  button.btn{font:inherit;font-weight:650;font-size:14px;padding:12px 16px;border-radius:10px;
+    border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;width:100%;}
+  button.btn.ghost{background:var(--surface);color:var(--accent);}
+  button.btn.sub{background:var(--chip);color:var(--ink);border-color:var(--line);}
+  button.btn:disabled{opacity:.5;cursor:default;}
+  .row{display:flex;gap:8px;} .row>*{flex:1;}
+  .mt{margin-top:10px;}
+
+  input[type=text],input[type=number]{font:inherit;padding:11px 12px;border:1px solid var(--line);
+    border-radius:10px;width:100%;background:var(--surface);color:var(--ink);}
+
+  .canvaswrap{position:relative;width:100%;background:#0e1519;border-radius:10px;overflow:hidden;}
+  canvas{display:block;width:100%;height:auto;touch-action:none;}
+
+  .status{font-size:12.5px;color:var(--muted);text-align:center;padding:8px;}
+  .banner{font-size:13px;padding:10px 12px;border-radius:10px;margin-bottom:12px;}
+  .banner.load{background:#fff6e6;color:#7a5a10;border:1px solid #f0dfae;}
+  .banner.err{background:#fbeae6;color:#8a2f1c;border:1px solid #efc8bd;}
+
+  .score{display:flex;align-items:baseline;gap:8px;}
+  .score .big{font-size:34px;font-weight:750;}
+  .score .of{color:var(--muted);font-size:15px;}
+  .tally{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-top:4px;flex-wrap:wrap;}
+  .tally b{color:var(--ink);}
+
+  /* answer key grid */
+  .keygrid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px;margin-top:10px;}
+  .qrow{display:flex;align-items:center;gap:6px;}
+  .qrow .qn{width:26px;text-align:right;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .qrow .opt{flex:1;text-align:center;font-size:12.5px;font-weight:600;padding:6px 0;border:1px solid var(--line);
+    border-radius:7px;background:var(--surface);color:var(--muted);cursor:pointer;}
+  .qrow .opt.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);}
+  th{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:22px 0;}
+
+  details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;}
+  summary{font-size:12.5px;color:var(--muted);cursor:pointer;}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12px;color:var(--muted);}
+  .slider input{flex:1;}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink);}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> Bubble Grader</div>
+  <nav>
+    <button data-v="scan" class="on">Scan</button>
+    <button data-v="key">Answer key</button>
+    <button data-v="results">Results</button>
+  </nav>
+</header>
+
+<main>
+  <div id="engineBanner" class="banner load">Loading scanner engine... first run needs internet.</div>
+
+  <!-- ===================== SCAN ===================== -->
+  <section class="view on" id="view-scan">
+    <div class="card">
+      <h2>1. Photograph the sheet</h2>
+      <p class="note">Lay the sheet flat, fill the frame, keep even light and no shadow across it. The four black corner squares must all be visible.</p>
+      <input id="fileInput" type="file" accept="image/*" capture="environment" style="display:none" />
+      <button class="btn mt" id="takeBtn" disabled>Open camera / choose photo</button>
+    </div>
+
+    <div class="card" id="alignCard" style="display:none">
+      <h2>2. Line up the corners</h2>
+      <p class="note">Drag each handle onto the <b>centre of its black corner square</b>: green top-left, then clockwise. Auto-detect gets you close; nudge to correct.</p>
+      <div class="canvaswrap mt"><canvas id="alignCanvas"></canvas></div>
+      <div class="row mt">
+        <button class="btn sub" id="autoBtn">Auto-detect</button>
+        <button class="btn" id="readBtn">Read sheet</button>
+      </div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none">
+      <h2>3. Check and save</h2>
+      <div class="score"><span class="big" id="scoreBig">0</span><span class="of" id="scoreOf">/ 100</span></div>
+      <div class="tally" id="tally"></div>
+      <p class="note" id="keyWarn" style="display:none;color:var(--bad)">No answer key set yet, so this shows detected answers only. Set a key to get a score.</p>
+
+      <p class="note mt">Green = detected answer matches the key. Red = wrong. Amber = blank or double mark. Verify against the paper before saving.</p>
+      <div class="canvaswrap mt"><canvas id="overlayCanvas"></canvas></div>
+
+      <label class="blk" for="nameInput">Student name (type from the sheet)</label>
+      <input id="nameInput" type="text" placeholder="e.g. Dela Cruz, Juan" />
+      <button class="btn mt" id="saveBtn">Save result</button>
+      <button class="btn sub mt" id="rescanBtn">Scan another</button>
+
+      <details>
+        <summary>Reading sensitivity (open only if marks are misread)</summary>
+        <div class="slider">Fill threshold
+          <input id="thr" type="range" min="20" max="80" value="45" />
+          <span class="pill" id="thrVal">0.45</span>
+        </div>
+        <p class="note">Lower it if fully-shaded bubbles read as blank. Raise it if light stray marks read as answers. Then press "Re-read".</p>
+        <button class="btn ghost mt" id="rereadBtn">Re-read with new setting</button>
+      </details>
+    </div>
+    <div class="status" id="scanStatus"></div>
+  </section>
+
+  <!-- ===================== KEY ===================== -->
+  <section class="view" id="view-key">
+    <div class="card">
+      <h2>Answer key</h2>
+      <p class="note">Tap the correct letter for each item. Only the first N questions are scored, where N is the exam length below.</p>
+      <label class="blk" for="examLen">Questions in this exam (1-100)</label>
+      <input id="examLen" type="number" min="1" max="100" value="100" />
+      <div class="row mt">
+        <button class="btn ghost" id="useLastBtn">Use last scan as key</button>
+        <button class="btn sub" id="clearKeyBtn">Clear key</button>
+      </div>
+      <div class="keygrid" id="keygrid"></div>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section class="view" id="view-results">
+    <div class="card">
+      <h2>Results</h2>
+      <div id="resultsBody"></div>
+      <div class="row mt">
+        <button class="btn ghost" id="exportBtn">Export CSV</button>
+        <button class="btn sub" id="clearResBtn">Clear all</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="template.js"></script>
+<script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="onOpenCvReady()"></script>
+<script>
+/* ---------- tiny helpers ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var T = window.TEMPLATE;
+var CANON_W = 744, CANON_H = 1048;   // warped canonical size (A4-ish ratio)
+
+var store = {
+  get:function(k,d){ try{ var v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+  set:function(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- app state ---------- */
+var state = {
+  key:      store.get("omr_key",      new Array(T.QUESTIONS).fill(-1)), // -1 unset, 0..3 = A..D
+  examLen:  store.get("omr_examlen",  100),
+  results:  store.get("omr_results",  []),
+  thr:      store.get("omr_thr",      45),
+  srcMat:   null,          // current source image (cv.Mat)
+  handles:  null,          // 4 corner handles in DISPLAY coords {x,y}
+  dispScale:1,
+  lastAnswers:null         // detected answers of last read
+};
+if(!Array.isArray(state.key) || state.key.length!==T.QUESTIONS) state.key=new Array(T.QUESTIONS).fill(-1);
+
+/* ---------- OpenCV readiness ---------- */
+var cvReady=false;
+function markReady(){ cvReady=true; $("engineBanner").style.display="none"; $("takeBtn").disabled=false; }
+function onOpenCvReady(){
+  try{
+    if(typeof cv==="undefined"){ return; }
+    if(cv instanceof Promise){ cv.then(function(m){ window.cv=m; markReady(); }); }
+    else if(cv.getBuildInformation){ markReady(); }
+    else { cv.onRuntimeInitialized = markReady; }
+  }catch(e){
+    var b=$("engineBanner"); b.className="banner err"; b.textContent="Could not start the scanner engine. Check your internet on first load, then reload.";
+  }
+}
+
+/* ---------- navigation ---------- */
+document.querySelectorAll("nav button").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    document.querySelectorAll("nav button").forEach(function(b){b.classList.remove("on");});
+    btn.classList.add("on");
+    ["scan","key","results"].forEach(function(v){ $("view-"+v).classList.toggle("on", v===btn.dataset.v); });
+    if(btn.dataset.v==="results") renderResults();
+    if(btn.dataset.v==="key") renderKey();
+  });
+});
+
+/* ================= SCAN: load photo ================= */
+$("takeBtn").addEventListener("click",function(){ $("fileInput").click(); });
+$("fileInput").addEventListener("change",function(e){
+  var f=e.target.files && e.target.files[0]; if(!f) return;
+  var img=new Image();
+  img.onload=function(){
+    var cnv=document.createElement("canvas");
+    // cap source size to keep processing quick on phones
+    var maxSide=1600, sc=Math.min(1, maxSide/Math.max(img.width,img.height));
+    cnv.width=Math.round(img.width*sc); cnv.height=Math.round(img.height*sc);
+    cnv.getContext("2d").drawImage(img,0,0,cnv.width,cnv.height);
+    if(state.srcMat){ state.srcMat.delete(); }
+    state.srcMat=cv.imread(cnv);
+    setupAlignment();
+    $("fileInput").value="";
+  };
+  img.onerror=function(){ setStatus("Could not open that image."); };
+  img.src=URL.createObjectURL(f);
+});
+
+/* ================= SCAN: alignment ================= */
+function setupAlignment(){
+  $("alignCard").style.display="block";
+  $("resultCard").style.display="none";
+  var src=state.srcMat, cnv=$("alignCanvas");
+  var wrapW=cnv.parentElement.clientWidth || 340;
+  state.dispScale = wrapW/src.cols;
+  cnv.width=wrapW; cnv.height=Math.round(src.rows*state.dispScale);
+  // default handle inset ~ where markers usually sit
+  var ix=cnv.width*0.10, iy=cnv.height*0.10;
+  state.handles=[{x:ix,y:iy},{x:cnv.width-ix,y:iy},{x:cnv.width-ix,y:cnv.height-iy},{x:ix,y:cnv.height-iy}];
+  drawAlignment();
+  $("alignCard").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function drawAlignment(){
+  var cnv=$("alignCanvas"), ctx=cnv.getContext("2d");
+  // draw the source scaled
+  var tmp=document.createElement("canvas"); tmp.width=state.srcMat.cols; tmp.height=state.srcMat.rows;
+  cv.imshow(tmp, state.srcMat);
+  ctx.clearRect(0,0,cnv.width,cnv.height);
+  ctx.drawImage(tmp,0,0,cnv.width,cnv.height);
+  // quad
+  var h=state.handles;
+  ctx.strokeStyle="rgba(47,111,79,.95)"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(h[0].x,h[0].y);
+  for(var i=1;i<4;i++) ctx.lineTo(h[i].x,h[i].y);
+  ctx.closePath(); ctx.stroke();
+  // handles
+  var labels=["TL","TR","BR","BL"];
+  for(var i=0;i<4;i++){
+    ctx.fillStyle= i===0? "#2f6f4f":"#ffffff";
+    ctx.strokeStyle="#2f6f4f"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(h[i].x,h[i].y,11,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle= i===0? "#fff":"#2f6f4f"; ctx.font="bold 10px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(labels[i],h[i].x,h[i].y);
+  }
+}
+(function enableDrag(){
+  var cnv=$("alignCanvas"), active=-1;
+  function pos(ev){ var r=cnv.getBoundingClientRect();
+    var t=(ev.touches&&ev.touches[0])||ev; return {x:(t.clientX-r.left)*(cnv.width/r.width), y:(t.clientY-r.top)*(cnv.height/r.height)}; }
+  function down(ev){ if(!state.handles) return; var p=pos(ev),best=-1,bd=1e9;
+    for(var i=0;i<4;i++){var d=Math.hypot(p.x-state.handles[i].x,p.y-state.handles[i].y); if(d<bd){bd=d;best=i;}}
+    if(bd<40){ active=best; ev.preventDefault(); } }
+  function move(ev){ if(active<0) return; var p=pos(ev);
+    state.handles[active]={x:Math.max(0,Math.min(cnv.width,p.x)),y:Math.max(0,Math.min(cnv.height,p.y))}; drawAlignment(); ev.preventDefault(); }
+  function up(){ active=-1; }
+  cnv.addEventListener("pointerdown",down); cnv.addEventListener("pointermove",move);
+  window.addEventListener("pointerup",up);
+})();
+
+/* auto-detect the 4 corner markers (best effort) */
+$("autoBtn").addEventListener("click",function(){
+  if(!state.srcMat) return;
+  var g=new cv.Mat(), bin=new cv.Mat(), contours=new cv.MatVector(), hi=new cv.Mat();
+  try{
+    cv.cvtColor(state.srcMat,g,cv.COLOR_RGBA2GRAY);
+    cv.threshold(g,bin,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU);
+    cv.findContours(bin,contours,hi,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+    var A=state.srcMat.cols*state.srcMat.rows, cands=[];
+    for(var i=0;i<contours.size();i++){
+      var c=contours.get(i), r=cv.boundingRect(c), a=cv.contourArea(c);
+      var rectA=r.width*r.height, ar=r.width/r.height;
+      if(rectA>A*0.0002 && rectA<A*0.02 && ar>0.55 && ar<1.8 && a/rectA>0.7){
+        cands.push({cx:r.x+r.width/2, cy:r.y+r.height/2});
+      }
+      c.delete();
+    }
+    if(cands.length<4){ setStatus("Auto-detect could not find 4 corner squares. Align by hand."); }
+    else{
+      var W=state.srcMat.cols,H=state.srcMat.rows;
+      var corners=[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
+      var picks=corners.map(function(co){
+        var best=null,bd=1e18; cands.forEach(function(p){var d=(p.cx-co.x)*(p.cx-co.x)+(p.cy-co.y)*(p.cy-co.y); if(d<bd){bd=d;best=p;}});
+        return best;
+      });
+      state.handles=picks.map(function(p){ return {x:p.cx*state.dispScale, y:p.cy*state.dispScale}; });
+      drawAlignment(); setStatus("Corners detected. Nudge any that are off, then Read sheet.");
+    }
+  }catch(e){ setStatus("Auto-detect failed. Align by hand."); }
+  finally{ g.delete(); bin.delete(); contours.delete(); hi.delete(); }
+});
+
+/* ================= SCAN: read ================= */
+$("readBtn").addEventListener("click",function(){ readSheet(); });
+$("rereadBtn").addEventListener("click",function(){ readSheet(); });
+
+function readSheet(){
+  if(!state.srcMat || !state.handles){ return; }
+  var thr = state.thr/100;
+  var src=state.srcMat, inv=1/state.dispScale;
+  // handles -> source pixel coords, order TL,TR,BR,BL
+  var sp=[]; for(var i=0;i<4;i++){ sp.push(state.handles[i].x*inv, state.handles[i].y*inv); }
+  var srcTri=cv.matFromArray(4,1,cv.CV_32FC2, sp);
+  var dstTri=cv.matFromArray(4,1,cv.CV_32FC2, [0,0, CANON_W,0, CANON_W,CANON_H, 0,CANON_H]);
+  var M=cv.getPerspectiveTransform(srcTri,dstTri);
+  var warpC=new cv.Mat(), gray=new cv.Mat(), blur=new cv.Mat(), bin=new cv.Mat();
+  try{
+    cv.warpPerspective(src,warpC,M,new cv.Size(CANON_W,CANON_H),cv.INTER_LINEAR,cv.BORDER_CONSTANT,new cv.Scalar(255,255,255,255));
+    cv.cvtColor(warpC,gray,cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray,blur,new cv.Size(3,3),0);
+    // marks become white(255); adaptive handles uneven lighting
+    cv.adaptiveThreshold(blur,bin,255,cv.ADAPTIVE_THRESH_MEAN_C,cv.THRESH_BINARY_INV,25,12);
+
+    var data=bin.data, W=CANON_W, H=CANON_H;
+    var half=Math.max(3, Math.round(T.BUBBLE_DIAM*W*0.32));
+    var answers=new Array(T.QUESTIONS).fill(-1);   // -1 blank, -2 multiple, 0..3 choice
+    var fracsAll=new Array(T.QUESTIONS);
+
+    for(var q=0;q<T.QUESTIONS;q++){
+      var fr=[0,0,0,0];
+      for(var ch=0;ch<4;ch++){
+        var c=Math.floor(q/T.ROWS), r=q%T.ROWS;
+        var nx=c*T.COL_W+T.BUBBLE_X[ch], ny=T.Y_TOP+(r+0.5)*T.ROW_H;
+        var px=Math.round(nx*W), py=Math.round(ny*H), on=0, tot=0;
+        for(var yy=py-half; yy<=py+half; yy++){
+          if(yy<0||yy>=H) continue; var base=yy*W;
+          for(var xx=px-half; xx<=px+half; xx++){
+            if(xx<0||xx>=W) continue; tot++; if(data[base+xx]>0) on++;
+          }
+        }
+        fr[ch]= tot? on/tot : 0;
+      }
+      fracsAll[q]=fr;
+      // decide
+      var mi=0; for(var k=1;k<4;k++){ if(fr[k]>fr[mi]) mi=k; }
+      var second=-1; for(var k=0;k<4;k++){ if(k!==mi && fr[k]>second) second=fr[k]; }
+      if(fr[mi]<thr) answers[q]=-1;
+      else if(second>=thr && second>=fr[mi]*0.80) answers[q]=-2;
+      else answers[q]=mi;
+    }
+
+    state.lastAnswers=answers;
+    drawOverlay(warpC, answers, fracsAll, thr);
+    showScore(answers);
+    $("alignCard").style.display="none";
+    $("resultCard").style.display="block";
+    $("resultCard").scrollIntoView({behavior:"smooth",block:"start"});
+    setStatus("");
+  }catch(e){ setStatus("Reading failed: "+e.message); }
+  finally{ srcTri.delete(); dstTri.delete(); M.delete(); warpC.delete(); gray.delete(); blur.delete(); bin.delete(); }
+}
+
+function drawOverlay(warpC, answers, fracsAll, thr){
+  var cnv=$("overlayCanvas");
+  cv.imshow(cnv, warpC);                 // sets cnv to CANON_W x CANON_H
+  var ctx=cnv.getContext("2d");
+  var W=cnv.width, H=cnv.width*(CANON_H/CANON_W); // backing already correct
+  var rad=T.BUBBLE_DIAM*cnv.width*0.55;
+  var keySet = state.key.some(function(v){return v>=0;});
+  for(var q=0;q<T.QUESTIONS;q++){
+    if(q>=state.examLen) continue;
+    var det=answers[q], key=state.key[q];
+    for(var ch=0;ch<4;ch++){
+      var c=Math.floor(q/T.ROWS), r=q%T.ROWS;
+      var nx=c*T.COL_W+T.BUBBLE_X[ch], ny=T.Y_TOP+(r+0.5)*T.ROW_H;
+      var cx=nx*cnv.width, cy=ny*cnv.height;
+      var isDet=(ch===det);
+      var col=null,wid=2;
+      if(isDet){
+        if(!keySet||key<0) col="rgba(31,111,180,.95)";     // just detected
+        else if(det===key) col="rgba(47,111,79,.95)";      // correct
+        else col="rgba(180,70,47,.95)";                    // wrong
+        wid=3;
+      } else if(keySet && key===ch && det!==key){
+        col="rgba(176,125,24,.9)"; wid=2;                  // where the right answer was
+      }
+      if(col){ ctx.beginPath(); ctx.arc(cx,cy,rad,0,7); ctx.strokeStyle=col; ctx.lineWidth=wid; ctx.stroke(); }
+    }
+    if(det===-2){ // double mark flag
+      var c2=Math.floor(q/T.ROWS), r2=q%T.ROWS;
+      var mx=(c2*T.COL_W+T.BUBBLE_X[0])*cnv.width - rad*2, my=(T.Y_TOP+(r2+0.5)*T.ROW_H)*cnv.height;
+      ctx.fillStyle="rgba(176,125,24,.95)"; ctx.font="bold "+Math.round(rad*1.6)+"px system-ui";
+      ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("!",mx,my);
+    }
+  }
+}
+
+function showScore(answers){
+  var keySet=state.key.some(function(v){return v>=0;});
+  $("keyWarn").style.display = keySet? "none":"block";
+  $("scoreOf").textContent = "/ "+state.examLen;
+  var correct=0,wrong=0,blank=0,dbl=0;
+  for(var q=0;q<state.examLen;q++){
+    var d=answers[q], k=state.key[q];
+    if(d===-2) dbl++;
+    else if(d===-1) blank++;
+    if(keySet && k>=0){ if(d===k) correct++; else wrong++; }
+  }
+  $("scoreBig").textContent = keySet? correct : "-";
+  $("tally").innerHTML =
+    "<span>Correct <b>"+correct+"</b></span>"+
+    "<span>Wrong <b>"+wrong+"</b></span>"+
+    "<span>Blank <b>"+blank+"</b></span>"+
+    "<span>Double <b>"+dbl+"</b></span>";
+  state._lastCorrect=correct;
+}
+
+/* save / rescan */
+$("saveBtn").addEventListener("click",function(){
+  var name=($("nameInput").value||"").trim();
+  if(!name){ setStatus("Type the student name first."); $("nameInput").focus(); return; }
+  var ans=state.lastAnswers.slice(0,state.examLen).map(function(a){
+    return a===-1?"":(a===-2?"?":T.CHOICES[a]);
+  }).join("");
+  state.results.push({ name:name, score:state._lastCorrect, total:state.examLen,
+    when:new Date().toISOString(), answers:ans });
+  store.set("omr_results",state.results);
+  $("nameInput").value="";
+  setStatus("Saved "+name+" ("+state._lastCorrect+"/"+state.examLen+").");
+  resetScan();
+});
+$("rescanBtn").addEventListener("click",resetScan);
+function resetScan(){
+  $("resultCard").style.display="none"; $("alignCard").style.display="none";
+  if(state.srcMat){ state.srcMat.delete(); state.srcMat=null; }
+  $("takeBtn").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+/* threshold slider */
+$("thr").addEventListener("input",function(){
+  state.thr=+this.value; $("thrVal").textContent=(state.thr/100).toFixed(2); store.set("omr_thr",state.thr);
+});
+$("thr").value=state.thr; $("thrVal").textContent=(state.thr/100).toFixed(2);
+
+/* ================= ANSWER KEY ================= */
+function renderKey(){
+  $("examLen").value=state.examLen;
+  var g=$("keygrid"); g.innerHTML="";
+  for(var q=0;q<T.QUESTIONS;q++){
+    var row=document.createElement("div"); row.className="qrow";
+    var n=document.createElement("div"); n.className="qn"; n.textContent=(q+1); row.appendChild(n);
+    for(var ch=0;ch<4;ch++){
+      var o=document.createElement("div"); o.className="opt"+(state.key[q]===ch?" on":"");
+      o.textContent=T.CHOICES[ch]; o.dataset.q=q; o.dataset.ch=ch;
+      o.addEventListener("click",onKeyTap); row.appendChild(o);
+    }
+    g.appendChild(row);
+  }
+}
+function onKeyTap(e){
+  var q=+e.target.dataset.q, ch=+e.target.dataset.ch;
+  state.key[q]= (state.key[q]===ch? -1 : ch);
+  store.set("omr_key",state.key);
+  // repaint just this row
+  var opts=e.target.parentElement.querySelectorAll(".opt");
+  opts.forEach(function(o){ o.classList.toggle("on", +o.dataset.ch===state.key[q]); });
+}
+$("examLen").addEventListener("change",function(){
+  var v=Math.max(1,Math.min(100, parseInt(this.value||"100",10)));
+  state.examLen=v; this.value=v; store.set("omr_examlen",v);
+});
+$("clearKeyBtn").addEventListener("click",function(){
+  if(!confirm("Clear the whole answer key?")) return;
+  state.key=new Array(T.QUESTIONS).fill(-1); store.set("omr_key",state.key); renderKey();
+});
+$("useLastBtn").addEventListener("click",function(){
+  if(!state.lastAnswers){ alert("Scan a filled master sheet first, then come here."); return; }
+  state.key=state.lastAnswers.map(function(a){ return a>=0?a:-1; });
+  store.set("omr_key",state.key); renderKey();
+  alert("Answer key set from the last scan. Review it below.");
+});
+
+/* ================= RESULTS ================= */
+function renderResults(){
+  var b=$("resultsBody");
+  if(!state.results.length){ b.innerHTML='<div class="empty">No saved results yet.</div>'; return; }
+  var rows=state.results.map(function(r,i){
+    var d=new Date(r.when); var t=d.toLocaleDateString()+" "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+    return "<tr><td>"+escapeHtml(r.name)+"</td><td class='num'>"+r.score+" / "+r.total+"</td><td>"+t+
+      "</td><td class='num'><button data-i='"+i+"' class='delRes' style='border:none;background:none;color:var(--bad);cursor:pointer'>remove</button></td></tr>";
+  }).join("");
+  b.innerHTML="<table><thead><tr><th>Name</th><th>Score</th><th>When</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>";
+  b.querySelectorAll(".delRes").forEach(function(x){ x.addEventListener("click",function(){
+    state.results.splice(+this.dataset.i,1); store.set("omr_results",state.results); renderResults();
+  });});
+}
+$("exportBtn").addEventListener("click",function(){
+  if(!state.results.length){ alert("Nothing to export yet."); return; }
+  var head="Name,Score,Total,Timestamp,Answers\n";
+  var body=state.results.map(function(r){
+    return '"'+r.name.replace(/"/g,'""')+'",'+r.score+","+r.total+","+r.when+","+r.answers;
+  }).join("\n");
+  var blob=new Blob([head+body],{type:"text/csv"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="grades-"+new Date().toISOString().slice(0,10)+".csv"; a.click();
+});
+$("clearResBtn").addEventListener("click",function(){
+  if(!confirm("Delete all saved results?")) return;
+  state.results=[]; store.set("omr_results",state.results); renderResults();
+});
+
+/* ---------- misc ---------- */
+function setStatus(t){ $("scanStatus").textContent=t||""; }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+/* register service worker for offline / installable */
+if("serviceWorker" in navigator){ window.addEventListener("load",function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); }); }
+</script>
+</body>
+</html>
